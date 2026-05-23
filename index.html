@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>喂！從你隻左眼搭的士去右眼要$300喎！</title>
+  <meta name="description" content="香港最硬核的士眼球泊車遊戲">
+  <style>
+    :root{--panel:#fff7e7;--ink:#1f1f1f;--red:#e40012;--gold:#ffd54a;--shadow:rgba(0,0,0,.18);}
+    *{box-sizing:border-box}
+    html,body{margin:0;width:100%;height:100%;overflow:hidden;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;background:#111;}
+    #app{position:relative;width:100vw;height:100vh;touch-action:manipulation;user-select:none}
+    canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+    .ui{position:absolute;inset:0;pointer-events:none}
+    .topbar{position:absolute;left:12px;right:12px;top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;pointer-events:auto;z-index:10;}
+    .pill{background:rgba(255,255,255,.92);backdrop-filter:blur(10px);border:3px solid rgba(0,0,0,.12);border-radius:999px;padding:8px 14px;font-weight:900;color:var(--ink);box-shadow:0 8px 0 var(--shadow);}
+    .btn{pointer-events:auto;border:none;border-radius:16px;padding:12px 18px;font-weight:1000;cursor:pointer;background:linear-gradient(180deg,#fff,#ffe8a3);color:#222;box-shadow:0 6px 0 var(--shadow);}
+    .btn:active{transform:translateY(3px);box-shadow:0 3px 0 var(--shadow)}
+    .panel{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(92vw,640px);background:rgba(255,248,240,.96);backdrop-filter:blur(12px);border:4px solid rgba(0,0,0,.16);border-radius:28px;padding:24px;box-shadow:0 16px 0 var(--shadow);text-align:center;color:#222;pointer-events:auto;z-index:20;}
+    .title{font-size:clamp(28px,6.5vw,52px);font-weight:1000;line-height:1.1;margin:0 0 12px;}
+    .bigmsg{font-size:clamp(46px,10vw,78px);font-weight:1000;letter-spacing:1px;margin:10px 0;}
+    .hidden{display:none}
+    .banner{position:absolute;left:50%;top:10%;transform:translateX(-50%);font-size:clamp(17px,4vw,29px);font-weight:1000;color:#fff;background:rgba(0,0,0,.45);padding:10px 20px;border-radius:999px;text-shadow:0 2px 0 rgba(0,0,0,.4);z-index:9;}
+  </style>
+</head>
+<body>
+<div id="app">
+  <canvas id="game"></canvas>
+  <div class="ui">
+    <div class="topbar">
+      <div class="pill">玩家：<input id="nameInput" maxlength="12" value="的士佬"></div>
+      <div class="pill">最高分：<span id="bestText">0</span></div>
+      <button class="btn" id="btnStart">開始揸的士</button>
+      <button class="btn" id="btnRestart">重新嚟過</button>
+      <button class="btn" id="btnRefreshRank">排行榜</button>
+    </div>
+    <div class="banner hidden" id="banner"></div>
+
+    <div class="panel" id="startPanel">
+      <h1 class="title">喂！從你隻左眼搭的士去右眼要$300喎！</h1>
+      <div class="subtitle">香港眼球泊車終極挑戰</div>
+      <div style="font-size:15.5px;line-height:1.65;margin:18px auto;max-width:520px;text-align:left;">
+        的士自動向右行 • 只可以點一下畫面即時煞停<br>
+        <b>過關條件：</b>整架的士必須完全停在右眼瞳孔範圍內
+      </div>
+      <button class="btn" id="btnStart2" style="margin-top:12px;padding:16px 36px;font-size:19px;">即刻開波</button>
+    </div>
+
+    <div class="panel hidden" id="endPanel">
+      <div class="bigmsg" id="endMsg">黑的</div>
+      <div class="subtitle" id="endInfo">第 <span id="levelNum">1</span> 關</div>
+      <div id="endComment" style="font-size:17.5px;margin:20px 0;min-height:85px;line-height:1.55;"></div>
+      <div>
+        <button class="btn" id="btnNext">去下一關</button>
+        <button class="btn" id="btnAgain">從第1關重新開始</button>
+      </div>
+    </div>
+
+    <div class="panel hidden" id="rankPanel" style="max-width:720px;">
+      <button id="rankClose" style="position:absolute;top:12px;right:16px;font-size:32px;background:none;border:none;cursor:pointer;color:#222;">×</button>
+      <div class="subtitle" style="text-align:center;margin-bottom:12px">全球的士佬排行榜 🔥</div>
+      <div id="rankBody" style="max-height:55vh;overflow:auto;font-size:15px;"></div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const nameInput = document.getElementById('nameInput');
+  const bestText = document.getElementById('bestText');
+  const banner = document.getElementById('banner');
+  const startPanel = document.getElementById('startPanel');
+  const endPanel = document.getElementById('endPanel');
+  const endMsg = document.getElementById('endMsg');
+  const endInfo = document.getElementById('endInfo');
+  const endComment = document.getElementById('endComment');
+  const rankPanel = document.getElementById('rankPanel');
+  const rankClose = document.getElementById('rankClose');
+  const rankBody = document.getElementById('rankBody');
+  const btnNext = document.getElementById('btnNext');
+
+  let W=0, H=0, dpr=1;
+  let state = 'start';
+  let level = 1;
+  let score = 0;
+  let speed = 260;
+  let taxiX = 0, taxiY = 0, taxiW = 0, taxiH = 0;
+  let leftEye, rightEye;
+  let stopped = false;
+  let lastTime = 0;
+  let bgMusic;
+  let bgImg = new Image();
+  let taxiImg = new Image();
+
+  // 新評語
+  const failEarly = [
+    "你呢架的士係咪去錯站，仲未入眼就已經收工。",
+    "啱啱起步就煞，真係連影都未見到。",
+    "你想停車定想表演早洩式收車。",
+    "車頭仲喺外太空，你就當自己已經中咗。",
+    "呢鋪唔係未到位，係完全未有到場。",
+    "你呢種距離控制，連地圖都幫唔到你。",
+    "眼都未入，你已經心急到似趕住交租。",
+    "咁早停法，係咪驚右眼會報警。"
+  ];
+
+  const winLines = [
+    "呢鋪總算有啲嘢睇，啱啱好先叫做人。",
+    "終於唔係亂嚟，仲算有少少腦。",
+    "夾到咁準，算你唔好彩都有運。",
+    "係咁先啦，唔好以為自己幾時都咁醒。",
+    "今次勉強合格，唔好太快陶醉。",
+    "呢個位都中到，證明你仲有一丁點手感。",
+    "得喇得喇，唔使拎獎，但至少未丟人。",
+    "啱啱好，幾好彩，唔係靠實力都似係靠命。"
+  ];
+
+  const failLate = [
+    "過龍啦，仲要衝，真係當自己係黑的。",
+    "你唔係泊車，你係直接衝去第二個區。",
+    "右眼都擋唔住你，證明你真係手殘界傳奇。",
+    "再多行少少就可以去下一條街打卡。",
+    "咁都煞唔切，真係有心都救唔返。",
+    "你係想入站，定係想直飛出宇宙。",
+    "過咗頭仲咁淡定，服。",
+    "呢種走位，連高登都要話你離譜。"
+  ];
+
+  const hkNicknames = ["旺角車神","銅鑼灣急煞王","油麻地黑的哥","尖沙咀泊車仔","深水埗飛車手","大埔村口阿伯","元朗農夫的士","屯門夜更王","沙田靚仔司機","九龍城老炮","觀塘金牌煞車","黃大仙靈童","筲箕灣海鮮哥","西環老鬼","紅磡橋底王","高登的士佬","連登泊車神","On9的士","仆街泊車","肥仔的士"];
+
+  function rand(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+
+  function loadLocal(){
+    nameInput.value = localStorage.getItem('taxi_name') || '的士佬';
+    score = Number(localStorage.getItem('taxi_best')) || 0;
+    bestText.textContent = score;
+  }
+
+  function saveLocal(){
+    localStorage.setItem('taxi_name', nameInput.value);
+    localStorage.setItem('taxi_best', score);
+    bestText.textContent = score;
+  }
+
+  function resize(){
+    dpr = Math.min(2, window.devicePixelRatio || 1);
+    W = canvas.width = Math.floor(innerWidth * dpr);
+    H = canvas.height = Math.floor(innerHeight * dpr);
+    canvas.style.width = innerWidth + 'px';
+    canvas.style.height = innerHeight + 'px';
+
+    const baseR = Math.min(W, H) * 0.195;
+    leftEye  = {x: W*0.28, y: H*0.5, r: baseR * 0.95};
+    rightEye = {x: W*0.72, y: H*0.5, r: baseR};
+
+    taxiW = Math.min(W,H) * 0.17;
+    taxiH = taxiW * 0.52;
+    resetTaxi();
+  }
+
+  function resetTaxi(){
+    taxiX = leftEye.x - leftEye.r * 1.25;
+    taxiY = leftEye.y - taxiH * 0.38;
+    stopped = false;
+  }
+
+  function setLevelSpeed(){
+    speed = 255 + (level-1) * 19;
+  }
+
+  function showBanner(text){
+    banner.textContent = text;
+    banner.classList.remove('hidden');
+    setTimeout(() => banner.classList.add('hidden'), 1400);
+  }
+
+  function startGame(startLevel = 1){
+    state = 'playing';
+    level = startLevel;
+    setLevelSpeed();
+    resetTaxi();
+    startPanel.classList.add('hidden');
+    endPanel.classList.add('hidden');
+    showBanner(`第 ${level} 關 • 啱啱好就點！`);
+    if(bgMusic) bgMusic.play().catch(()=>{});
+  }
+
+  function checkWin(){
+    const front = taxiX;
+    const back = taxiX + taxiW;
+    const pupilL = rightEye.x - rightEye.r * 0.62;
+    const pupilR = rightEye.x + rightEye.r * 0.62;
+    return front >= pupilL && back <= pupilR;
+  }
+
+  function stopTaxi(){
+    if(state !== 'playing' || stopped) return;
+    stopped = true;
+
+    const isWin = checkWin();
+    if(isWin){
+      endMsg.textContent = "過關";
+      endMsg.style.color = "#00c853";
+      endComment.textContent = rand(winLines);
+      if(level > score){
+        score = level;
+        saveLocal();
+      }
+      btnNext.style.display = 'inline-block';
+    } else {
+      endMsg.textContent = "失敗";
+      endMsg.style.color = "#e40012";
+      const isEarly = (taxiX + taxiW) < (rightEye.x - rightEye.r * 0.55);
+      endComment.textContent = rand(isEarly ? failEarly : failLate);
+      btnNext.style.display = 'none';
+    }
+
+    endInfo.querySelector('#levelNum').textContent = level;
+    endPanel.classList.remove('hidden');
+    state = 'end';
+  }
+
+  function nextLevel(){
+    if(state !== 'end') return;
+    startGame(level + 1);
+  }
+
+  function initMusic(){
+    bgMusic = new Audio("https://cdn.pixabay.com/audio/2023/03/24/audio_8f5f8e0e3f.mp3");
+    bgMusic.loop = true;
+    bgMusic.volume = 0.28;
+  }
+
+  function loadBackground(){ bgImg.src = "bg.jpg"; }
+  function loadTaxi(){ taxiImg.src = "taxi.jpg"; }
+
+  function drawBackground(){
+    if(bgImg.complete){
+      ctx.drawImage(bgImg, 0, 0, W, H);
+      ctx.fillStyle = 'rgba(0,0,0,0.38)';
+      ctx.fillRect(0,0,W,H);
+    } else {
+      ctx.fillStyle = '#0b0b1f';
+      ctx.fillRect(0,0,W,H);
+    }
+  }
+
+  function drawTaxi(){
+    if(taxiImg.complete){
+      ctx.drawImage(taxiImg, taxiX, taxiY, taxiW, taxiH);
+    } else {
+      ctx.fillStyle = '#e40012';
+      ctx.fillRect(taxiX, taxiY, taxiW, taxiH);
+    }
+  }
+
+  function drawEye(eye){
+    ctx.save();
+    ctx.translate(eye.x, eye.y);
+    ctx.fillStyle = '#fffdf0';
+    ctx.beginPath(); ctx.ellipse(0,0,eye.r*1.08,eye.r*0.9,0,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle = '#111'; ctx.lineWidth = 14*dpr; ctx.stroke();
+    ctx.fillStyle = '#111111';
+    ctx.beginPath(); ctx.arc(0,0,eye.r*0.64,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.beginPath(); ctx.arc(-eye.r*0.28,-eye.r*0.25,eye.r*0.19,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+
+  function draw(){
+    drawBackground();
+    drawEye(leftEye);
+    drawEye(rightEye);
+
+    const L = rightEye.x - rightEye.r * 0.62;
+    const R = rightEye.x + rightEye.r * 0.62;
+    ctx.strokeStyle = 'rgba(255,240,100,0.85)';
+    ctx.lineWidth = 7*dpr;
+    ctx.setLineDash([10,15]);
+    ctx.strokeRect(L, rightEye.y - rightEye.r*0.65, R-L, rightEye.r*1.3);
+    ctx.setLineDash([]);
+
+    drawTaxi();
+
+    if(state === 'playing'){
+      ctx.fillStyle = '#fff';
+      ctx.font = `bold ${19*dpr}px sans-serif`;
+      ctx.fillText(`第 ${level} 關`, 30*dpr, H-35*dpr);
+    }
+  }
+
+  function update(t){
+    const dt = Math.min(0.033, (t - lastTime)/1000);
+    lastTime = t;
+
+    if(state === 'playing' && !stopped){
+      taxiX += speed * dt * dpr * 1.08;
+      if(taxiX > rightEye.x + rightEye.r * 1.4){
+        stopTaxi();
+      }
+    }
+    draw();
+    requestAnimationFrame(update);
+  }
+
+  // 事件綁定
+  document.getElementById('btnStart').onclick = () => startGame(1);
+  document.getElementById('btnStart2').onclick = () => startGame(1);
+  document.getElementById('btnAgain').onclick = () => startGame(1);
+  document.getElementById('btnNext').onclick = nextLevel;
+  document.getElementById('btnRestart').onclick = () => startGame(1);
+  rankClose.onclick = () => rankPanel.classList.add('hidden');
+  nameInput.oninput = saveLocal;
+  document.getElementById('app').addEventListener('pointerdown', stopTaxi);
+  window.addEventListener('keydown', e => { if(e.code==='Space'){e.preventDefault(); stopTaxi();}});
+  window.addEventListener('resize', resize);
+
+  function loadFakeRanks(){
+    rankBody.innerHTML = '<div style="padding:10px 0;font-weight:700;color:#e40012;">全球排行榜（最高293）</div>';
+    let html = '';
+    const sorted = [...hkNicknames].sort(() => Math.random()-0.5).slice(0,12);
+    sorted.forEach((name,i) => {
+      const pts = i===0 ? 293 : Math.max(12, 280 - i*18);
+      html += `<div style="display:flex;justify-content:space-between;padding:8px 12px;border-bottom:1px solid #ddd;">
+        <span><b>#${i+1}</b> ${name}</span><span style="color:#e40012;font-weight:800">${pts}</span>
+      </div>`;
+    });
+    rankBody.innerHTML += html;
+  }
+
+  document.getElementById('btnRefreshRank').onclick = () => {
+    rankPanel.classList.remove('hidden');
+    loadFakeRanks();
+  };
+
+  // 初始化
+  loadLocal();
+  resize();
+  initMusic();
+  loadBackground();
+  loadTaxi();
+  requestAnimationFrame(update);
+</script>
+</body>
+</html>
